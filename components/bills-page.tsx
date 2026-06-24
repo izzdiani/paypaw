@@ -6,8 +6,11 @@ import { MoneyList } from "@/components/money-list";
 import { SummaryCard } from "@/components/summary-card";
 import { formatMonthLabel } from "@/lib/month-label";
 import { useBudgetStorage } from "@/lib/use-budget-storage";
+import { useSearchParams } from "next/navigation";
 
 export function BillsPage() {
+  const searchParams = useSearchParams();
+  const typeFilter = searchParams.get("type");
   const {
     activeMonth,
     bills,
@@ -18,6 +21,13 @@ export function BillsPage() {
     toggleBillPaid,
     deleteBill
   } = useBudgetStorage();
+  const visibleBills = [...bills]
+    .filter((item) => (
+      typeFilter === "bill" || typeFilter === "expense"
+        ? (item.type ?? "bill") === typeFilter
+        : true
+    ))
+    .sort((first, second) => second.amount - first.amount);
 
   return (
     <AppShell>
@@ -37,7 +47,7 @@ export function BillsPage() {
         <MoneyList
           emptyMessage="No bills yet."
           categories={categories}
-          items={bills}
+          items={visibleBills}
           onDelete={deleteBill}
           onEdit={updateBill}
           onTogglePaid={toggleBillPaid}

@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { formatCategoryLabel } from "@/lib/default-categories";
+import { parseMoneyInput } from "@/lib/money";
 import type { CategoryItem, MoneyItem } from "@/lib/types";
 
 type MoneyFormProps = {
@@ -29,7 +30,7 @@ export function MoneyForm({
     event.preventDefault();
 
     const trimmedName = name.trim();
-    const parsedAmount = Number(amount);
+    const parsedAmount = parseMoneyInput(amount);
     const parsedRecurringInterval = recurringInterval ? Number(recurringInterval) : null;
 
     if (
@@ -47,7 +48,7 @@ export function MoneyForm({
       amount: parsedAmount,
       category: category.trim() || undefined,
       type: includeCategory ? itemType : undefined,
-      recurringInterval: includeCategory && itemType === "bill" ? parsedRecurringInterval : null
+      recurringInterval: includeCategory ? parsedRecurringInterval : null
     });
 
     setName("");
@@ -77,10 +78,8 @@ export function MoneyForm({
             onChange={(event) => setAmount(event.target.value)}
             className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
             inputMode="decimal"
-            min="0"
             placeholder="0.00"
-            step="0.01"
-            type="number"
+            type="text"
           />
         </label>
 
@@ -106,14 +105,7 @@ export function MoneyForm({
               Type
               <select
                 value={itemType}
-                onChange={(event) => {
-                  const nextType = event.target.value as "bill" | "expense";
-                  setItemType(nextType);
-
-                  if (nextType === "expense") {
-                    setRecurringInterval("");
-                  }
-                }}
+                onChange={(event) => setItemType(event.target.value as "bill" | "expense")}
                 className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
               >
                 <option value="bill">Bill</option>
@@ -126,8 +118,7 @@ export function MoneyForm({
               <input
                 value={recurringInterval}
                 onChange={(event) => setRecurringInterval(event.target.value)}
-                className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple disabled:opacity-50"
-                disabled={itemType === "expense"}
+                className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
                 inputMode="numeric"
                 min="1"
                 placeholder="Optional, e.g. 1 for monthly"

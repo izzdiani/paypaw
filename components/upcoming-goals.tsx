@@ -2,14 +2,17 @@
 
 import { FormEvent, useState } from "react";
 import { formatMoney } from "@/lib/format-money";
+import { parseMoneyInput } from "@/lib/money";
 import type { GoalItem } from "@/lib/types";
 
 type UpcomingGoalsProps = {
   goals: GoalItem[];
   onAdd: (goal: Omit<GoalItem, "id">) => void;
+  onAddLink: (id: string, link: string) => void;
   onAddSaved: (id: string, amount: number) => void;
   onDelete: (id: string) => void;
   onEdit: (id: string, goal: Omit<GoalItem, "id">) => void;
+  onRemoveLink: (id: string, linkIndex: number) => void;
 };
 
 type GoalFormState = {
@@ -17,17 +20,13 @@ type GoalFormState = {
   targetAmount: string;
   savedAmount: string;
   dueDate: string;
-  link: string;
-  note: string;
 };
 
 const emptyForm: GoalFormState = {
   name: "",
   targetAmount: "",
   savedAmount: "",
-  dueDate: "",
-  link: "",
-  note: ""
+  dueDate: ""
 };
 
 function getGoalForm(goal?: GoalItem): GoalFormState {
@@ -39,9 +38,7 @@ function getGoalForm(goal?: GoalItem): GoalFormState {
     name: goal.name,
     targetAmount: String(goal.targetAmount),
     savedAmount: String(goal.savedAmount),
-    dueDate: goal.dueDate ?? "",
-    link: goal.link ?? "",
-    note: goal.note ?? ""
+    dueDate: goal.dueDate ?? ""
   };
 }
 
@@ -52,22 +49,26 @@ function formatDueDate(dueDate?: string) {
 
   const [year, month, day] = dueDate.split("-").map(Number);
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
     month: "short",
-    day: "numeric"
+    year: "numeric"
   }).format(new Date(year, month - 1, day));
 }
 
 export function UpcomingGoals({
   goals,
   onAdd,
+  onAddLink,
   onAddSaved,
   onDelete,
-  onEdit
+  onEdit,
+  onRemoveLink
 }: UpcomingGoalsProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<GoalFormState>(emptyForm);
+  const [linkInputs, setLinkInputs] = useState<Record<string, string>>({});
   const [savedInputs, setSavedInputs] = useState<Record<string, string>>({});
 
   function updateForm(field: keyof GoalFormState, value: string) {
@@ -84,20 +85,20 @@ export function UpcomingGoals({
     event.preventDefault();
 
     const name = form.name.trim();
-    const targetAmount = Number(form.targetAmount);
-    const savedAmount = Number(form.savedAmount || 0);
+    const targetAmount = parseMoneyInput(form.targetAmount);
+    const savedAmount = form.savedAmount ? parseMoneyInput(form.savedAmount) : 0;
 
     if (!name || Number.isNaN(targetAmount) || targetAmount <= 0 || Number.isNaN(savedAmount)) {
       return;
     }
 
+    const existingGoal = goals.find((goal) => goal.id === editingId);
     const goal = {
       name,
       targetAmount,
       savedAmount: Math.max(savedAmount, 0),
       dueDate: form.dueDate || undefined,
-      link: form.link.trim() || undefined,
-      note: form.note.trim() || undefined
+      links: existingGoal?.links ?? []
     };
 
     if (editingId) {
@@ -147,7 +148,7 @@ export function UpcomingGoals({
               className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
               inputMode="decimal"
               placeholder="Target"
-              type="number"
+              type="text"
             />
             <input
               value={form.savedAmount}
@@ -155,7 +156,7 @@ export function UpcomingGoals({
               className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
               inputMode="decimal"
               placeholder="Saved"
-              type="number"
+              type="text"
             />
           </div>
           <input
@@ -163,18 +164,6 @@ export function UpcomingGoals({
             onChange={(event) => updateForm("dueDate", event.target.value)}
             className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
             type="date"
-          />
-          <input
-            value={form.link}
-            onChange={(event) => updateForm("link", event.target.value)}
-            className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
-            placeholder="Link"
-          />
-          <input
-            value={form.note}
-            onChange={(event) => updateForm("note", event.target.value)}
-            className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
-            placeholder="Note"
           />
           <div className="grid grid-cols-2 gap-2">
             <button className="rounded-xl bg-paw-purple px-3 py-2 text-sm font-bold text-white">
@@ -210,20 +199,13 @@ export function UpcomingGoals({
                       {formatMoney(goal.savedAmount)} / {formatMoney(goal.targetAmount)}
                     </p>
                     {dueDate ? (
-                      <p className="text-xs font-semibold text-paw-plum/70">Due {dueDate}</p>
+                      <p className="text-xs font-semibold text-paw-plum/70">Due: {dueDate}</p>
                     ) : null}
+                    <p className="text-xs font-semibold text-paw-plum/70">
+                      Links: {goal.links.length}
+                    </p>
                   </div>
                   <div className="flex shrink-0 gap-1">
-                    {goal.link ? (
-                      <a
-                        href={goal.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full bg-white px-2 py-1 text-xs font-bold text-paw-purple"
-                      >
-                        Open Link
-                      </a>
-                    ) : null}
                     <button
                       onClick={() => startEdit(goal)}
                       className="rounded-full bg-paw-lavender px-2 py-1 text-xs font-bold text-paw-plum"
@@ -247,9 +229,54 @@ export function UpcomingGoals({
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <p className="mt-1 text-right text-xs font-bold text-paw-purple">
-                  {Math.round(progress)}%
-                </p>
+
+                {goal.links.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {goal.links.map((link, index) => (
+                      <span key={`${link}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1">
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-paw-purple"
+                        >
+                          Link {index + 1}
+                        </a>
+                        <button
+                          aria-label={`Remove link ${index + 1}`}
+                          onClick={() => onRemoveLink(goal.id, index)}
+                          className="text-xs font-bold text-red-600"
+                          type="button"
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    value={linkInputs[goal.id] ?? ""}
+                    onChange={(event) => setLinkInputs((current) => ({
+                      ...current,
+                      [goal.id]: event.target.value
+                    }))}
+                    className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
+                    placeholder="Add link"
+                    type="url"
+                  />
+                  <button
+                    onClick={() => {
+                      onAddLink(goal.id, linkInputs[goal.id] ?? "");
+                      setLinkInputs((current) => ({ ...current, [goal.id]: "" }));
+                    }}
+                    className="rounded-xl bg-paw-blush px-3 py-2 text-sm font-bold text-paw-purple"
+                    type="button"
+                  >
+                    Add Link
+                  </button>
+                </div>
 
                 <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
                   <input
@@ -261,11 +288,11 @@ export function UpcomingGoals({
                     className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
                     inputMode="decimal"
                     placeholder="Add saved amount"
-                    type="number"
+                    type="text"
                   />
                   <button
                     onClick={() => {
-                      const amount = Number(savedInputs[goal.id]);
+                      const amount = parseMoneyInput(savedInputs[goal.id] ?? "");
 
                       if (!Number.isNaN(amount) && amount > 0) {
                         onAddSaved(goal.id, amount);

@@ -21,7 +21,7 @@ export function UnpaidItems({ categories = [], items, onTogglePaid }: UnpaidItem
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-paw-plum">Unpaid Items</h2>
         <Link
-          href="/bills"
+          href="/bills?type=bill"
           className="rounded-full bg-paw-blush px-3 py-1.5 text-xs font-bold text-paw-purple transition hover:bg-paw-lavender"
         >
           Manage Bills

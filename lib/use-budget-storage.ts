@@ -3,10 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { defaultCategories } from "@/lib/default-categories";
+import { roundMoney } from "@/lib/money";
 import { getSupabase } from "@/lib/supabase-client";
 import type { BudgetData, CategoryItem, GoalItem, MoneyItem } from "@/lib/types";
 
 const STORAGE_KEY = "paypaw-data";
+
+type LegacyGoalItem = GoalItem & {
+  link?: string;
+  note?: string;
+  links?: string[];
+};
 
 function getCurrentMonthKey() {
   const now = new Date();
@@ -24,7 +31,8 @@ function createEmptyBudget(monthKey = getCurrentMonthKey()): BudgetData {
       [monthKey]: {
         income: [],
         bills: [],
-        goals: []
+        goals: [],
+        notes: ""
       }
     }
   };
@@ -48,9 +56,7 @@ function getPreviousMonthKey(monthKey: string) {
 
 function normalizeBill(bill: MoneyItem, monthKey: string): MoneyItem {
   const type = bill.type ?? "bill";
-  const recurringInterval = type === "bill"
-    ? bill.recurringInterval ?? (bill.isRecurring ? 1 : null)
-    : null;
+  const recurringInterval = bill.recurringInterval ?? (bill.isRecurring ? 1 : null);
 
   return {
     ...bill,
@@ -71,7 +77,7 @@ function copyIncomeItem(income: MoneyItem): MoneyItem {
 
 function copyBillItem(bill: MoneyItem, monthKey: string): MoneyItem {
   const type = bill.type ?? "bill";
-  const recurringInterval = type === "bill" ? bill.recurringInterval ?? null : null;
+  const recurringInterval = bill.recurringInterval ?? null;
 
   return {
     ...bill,
@@ -89,9 +95,9 @@ function copyRecurringBillForMonth(bill: MoneyItem, monthKey: string): MoneyItem
   return {
     id: crypto.randomUUID(),
     name: bill.name,
-    amount: bill.amount,
+    amount: roundMoney(bill.amount),
     category: bill.category,
-    type: "bill",
+    type: bill.type ?? "bill",
     dueDate: bill.dueDate,
     isRecurring: Boolean(bill.recurringInterval),
     recurringInterval: bill.recurringInterval,
@@ -114,7 +120,7 @@ function getRecurringBillsForNewMonth(data: BudgetData, monthKey: string) {
       const recurringInterval = normalizedBill.recurringInterval;
       const lastAddedMonth = normalizedBill.lastAddedMonth;
 
-      if (normalizedBill.type !== "bill" || !recurringInterval || !lastAddedMonth) {
+      if (!recurringInterval || !lastAddedMonth) {
         return;
       }
 
@@ -148,10 +154,28 @@ function normalizeBudget(data: BudgetData): BudgetData {
         {
           income: month.income ?? [],
           bills: (month.bills ?? []).map((bill) => normalizeBill(bill, monthKey)),
-          goals: month.goals ?? []
+          goals: (month.goals ?? []).map(normalizeGoal),
+          notes: month.notes ?? ""
         }
       ])
     )
+  };
+}
+
+function normalizeGoal(goal: LegacyGoalItem): GoalItem {
+  const links = goal.links?.length
+    ? goal.links
+    : goal.link
+      ? [goal.link]
+      : [];
+
+  return {
+    id: goal.id,
+    name: goal.name,
+    targetAmount: roundMoney(goal.targetAmount),
+    savedAmount: roundMoney(goal.savedAmount),
+    dueDate: goal.dueDate,
+    links
   };
 }
 
@@ -167,7 +191,8 @@ function ensureMonth(data: BudgetData, monthKey: string): BudgetData {
       [monthKey]: {
         income: [],
         bills: getRecurringBillsForNewMonth(data, monthKey),
-        goals: []
+        goals: [],
+        notes: ""
       }
     }
   };
@@ -362,7 +387,8 @@ export function useBudgetStorage() {
   const activeMonthData = budget.months[budget.activeMonth] ?? {
     income: [],
     bills: [],
-    goals: []
+    goals: [],
+    notes: ""
   };
   const categories = budget.categories?.length ? budget.categories : defaultCategories;
 
@@ -399,17 +425,12 @@ export function useBudgetStorage() {
     const totalExpenses = activeMonthData.bills
       .filter((item) => item.type === "expense")
       .reduce((sum, item) => sum + item.amount, 0);
-    const totalGoalRemaining = activeMonthData.goals.reduce((sum, goal) => (
-      sum + Math.max(goal.targetAmount - goal.savedAmount, 0)
-    ), 0);
-
     return {
       totalIncome,
       totalBills,
       unpaidBills,
       totalExpenses,
-      totalGoalRemaining,
-      safeToSpend: totalIncome - unpaidBills - totalExpenses - totalGoalRemaining
+      safeToSpend: totalIncome - unpaidBills - totalExpenses
     };
   }, [activeMonthData]);
 
@@ -466,7 +487,8 @@ export function useBudgetStorage() {
               ...activeMonth.bills,
               ...previousMonth.bills.map((bill) => copyBillItem(bill, activeMonthKey))
             ],
-            goals: activeMonth.goals
+            goals: activeMonth.goals,
+            notes: activeMonth.notes
           }
         }
       };
@@ -484,7 +506,7 @@ export function useBudgetStorage() {
           ...nextBudget.months,
           [nextBudget.activeMonth]: {
             ...month,
-            income: [...month.income, { ...item, id: crypto.randomUUID() }]
+            income: [...month.income, { ...item, amount: roundMoney(item.amount), id: crypto.randomUUID() }]
           }
         }
       };
@@ -497,7 +519,7 @@ export function useBudgetStorage() {
       const month = nextBudget.months[nextBudget.activeMonth];
       const id = crypto.randomUUID();
       const type = item.type ?? "bill";
-      const recurringInterval = type === "bill" ? item.recurringInterval ?? null : null;
+      const recurringInterval = item.recurringInterval ?? null;
 
       return {
         ...nextBudget,
@@ -511,6 +533,7 @@ export function useBudgetStorage() {
                 ...item,
                 id,
                 type,
+                amount: roundMoney(item.amount),
                 recurringInterval,
                 lastAddedMonth: recurringInterval ? nextBudget.activeMonth : null,
                 recurringId: recurringInterval ? id : null,
@@ -545,19 +568,19 @@ export function useBudgetStorage() {
               return {
                 ...bill,
                 name: item.name,
-                amount: item.amount,
+                amount: roundMoney(item.amount),
                 category: item.category,
                 type: item.type ?? "bill",
-                recurringInterval: item.type === "expense" ? null : item.recurringInterval ?? null,
+                recurringInterval: item.recurringInterval ?? null,
                 lastAddedMonth:
-                  item.type !== "expense" && item.recurringInterval
+                  item.recurringInterval
                     ? bill.lastAddedMonth ?? current.activeMonth
                     : null,
                 recurringId:
-                  item.type !== "expense" && item.recurringInterval
+                  item.recurringInterval
                     ? bill.recurringId ?? bill.id
                     : null,
-                isRecurring: item.type !== "expense" && Boolean(item.recurringInterval)
+                isRecurring: Boolean(item.recurringInterval)
               };
             })
           }
@@ -603,12 +626,13 @@ export function useBudgetStorage() {
               ...items.map((item) => {
                 const id = crypto.randomUUID();
                 const type = item.type ?? "bill";
-                const recurringInterval = type === "bill" ? item.recurringInterval ?? null : null;
+                const recurringInterval = item.recurringInterval ?? null;
 
                 return {
                   ...item,
                   id,
                   type,
+                  amount: roundMoney(item.amount),
                   recurringInterval,
                   lastAddedMonth: recurringInterval ? nextBudget.activeMonth : null,
                   recurringId: recurringInterval ? id : null,
@@ -660,7 +684,13 @@ export function useBudgetStorage() {
           ...nextBudget.months,
           [nextBudget.activeMonth]: {
             ...month,
-            goals: [...month.goals, { ...goal, id: crypto.randomUUID() }]
+            goals: [...month.goals, {
+              ...goal,
+              targetAmount: roundMoney(goal.targetAmount),
+              savedAmount: roundMoney(goal.savedAmount),
+              links: goal.links ?? [],
+              id: crypto.randomUUID()
+            }]
           }
         }
       };
@@ -678,7 +708,62 @@ export function useBudgetStorage() {
           [current.activeMonth]: {
             ...month,
             goals: month.goals.map((item) => (
-              item.id === id ? { ...goal, id } : item
+              item.id === id
+                ? {
+                  ...goal,
+                  id,
+                  targetAmount: roundMoney(goal.targetAmount),
+                  savedAmount: roundMoney(goal.savedAmount)
+                }
+                : item
+            ))
+          }
+        }
+      };
+    });
+  }
+
+  function addGoalLink(id: string, link: string) {
+    const trimmedLink = link.trim();
+
+    if (!trimmedLink) {
+      return;
+    }
+
+    updateBudget((current) => {
+      const month = current.months[current.activeMonth];
+
+      return {
+        ...current,
+        months: {
+          ...current.months,
+          [current.activeMonth]: {
+            ...month,
+            goals: month.goals.map((goal) => (
+              goal.id === id
+                ? { ...goal, links: [...goal.links, trimmedLink] }
+                : goal
+            ))
+          }
+        }
+      };
+    });
+  }
+
+  function removeGoalLink(id: string, linkIndex: number) {
+    updateBudget((current) => {
+      const month = current.months[current.activeMonth];
+
+      return {
+        ...current,
+        months: {
+          ...current.months,
+          [current.activeMonth]: {
+            ...month,
+            goals: month.goals.map((goal) => (
+              goal.id === id
+                ? { ...goal, links: goal.links.filter((_link, index) => index !== linkIndex) }
+                : goal
             ))
           }
         }
@@ -698,7 +783,7 @@ export function useBudgetStorage() {
             ...month,
             goals: month.goals.map((goal) => (
               goal.id === id
-                ? { ...goal, savedAmount: Math.max(goal.savedAmount + amount, 0) }
+                ? { ...goal, savedAmount: roundMoney(Math.max(goal.savedAmount + amount, 0)) }
                 : goal
             ))
           }
@@ -754,6 +839,24 @@ export function useBudgetStorage() {
     });
   }
 
+  function updateNotes(notes: string) {
+    updateBudget((current) => {
+      const nextBudget = ensureMonth(current, current.activeMonth);
+      const month = nextBudget.months[nextBudget.activeMonth];
+
+      return {
+        ...nextBudget,
+        months: {
+          ...nextBudget.months,
+          [nextBudget.activeMonth]: {
+            ...month,
+            notes
+          }
+        }
+      };
+    });
+  }
+
   function deleteIncome(id: string) {
     updateBudget((current) => {
       const month = current.months[current.activeMonth];
@@ -796,6 +899,7 @@ export function useBudgetStorage() {
     incomes: activeMonthData.income,
     bills: activeMonthData.bills,
     goals: activeMonthData.goals,
+    notes: activeMonthData.notes,
     ...totals,
     switchMonth,
     copyLastMonth,
@@ -805,8 +909,11 @@ export function useBudgetStorage() {
     importBills,
     updateBill,
     toggleBillPaid,
+    updateNotes,
     addGoal,
     updateGoal,
+    addGoalLink,
+    removeGoalLink,
     addGoalSavedAmount,
     deleteGoal,
     addCategory,

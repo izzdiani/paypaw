@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { formatMoney } from "@/lib/format-money";
 import { formatCategoryLabel } from "@/lib/default-categories";
+import { parseMoneyInput } from "@/lib/money";
 import type { CategoryItem, MoneyItem } from "@/lib/types";
 
 type MoneyListProps = {
@@ -53,7 +54,7 @@ export function MoneyList({
   function handleSave(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
 
-    const parsedAmount = Number(editAmount);
+    const parsedAmount = parseMoneyInput(editAmount);
     const parsedRecurringInterval = editRecurringInterval ? Number(editRecurringInterval) : null;
     const trimmedName = editName.trim();
 
@@ -73,7 +74,7 @@ export function MoneyList({
       amount: parsedAmount,
       category: editCategory.trim() || undefined,
       type: editType,
-      recurringInterval: editType === "bill" ? parsedRecurringInterval : null
+      recurringInterval: parsedRecurringInterval
     });
     stopEdit();
   }
@@ -111,9 +112,7 @@ export function MoneyList({
                   onChange={(event) => setEditAmount(event.target.value)}
                   className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
                   inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  type="number"
+                  type="text"
                 />
               </label>
 
@@ -137,14 +136,7 @@ export function MoneyList({
                 Type
                 <select
                   value={editType}
-                  onChange={(event) => {
-                    const nextType = event.target.value as "bill" | "expense";
-                    setEditType(nextType);
-
-                    if (nextType === "expense") {
-                      setEditRecurringInterval("");
-                    }
-                  }}
+                  onChange={(event) => setEditType(event.target.value as "bill" | "expense")}
                   className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
                 >
                   <option value="bill">Bill</option>
@@ -157,8 +149,7 @@ export function MoneyList({
                 <input
                   value={editRecurringInterval}
                   onChange={(event) => setEditRecurringInterval(event.target.value)}
-                  className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple disabled:opacity-50"
-                  disabled={editType === "expense"}
+                  className="rounded-xl border border-paw-lavender bg-paw-cream px-3 py-3 outline-none focus:border-paw-purple"
                   inputMode="numeric"
                   min="1"
                   placeholder="Optional, e.g. 1 for monthly"
@@ -207,14 +198,18 @@ export function MoneyList({
                     <p className={`truncate font-bold text-paw-plum ${item.isPaid ? "line-through" : ""}`}>
                       {item.name}
                     </p>
-                    <span className="rounded-full bg-paw-blush px-2 py-0.5 text-xs font-bold text-paw-purple">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                      (item.type ?? "bill") === "bill"
+                        ? "bg-paw-lavender text-paw-plum"
+                        : "bg-pink-100 text-pink-700"
+                    }`}>
                       {(item.type ?? "bill") === "bill" ? "Bill" : "Expense"}
                     </span>
                   </div>
                   <p className={`text-sm font-semibold text-paw-purple ${item.isPaid ? "line-through" : ""}`}>
                     {formatMoney(item.amount)}
                   </p>
-                  {(item.type ?? "bill") === "bill" && item.recurringInterval ? (
+                  {item.recurringInterval ? (
                     <p className="mt-1 truncate text-xs font-semibold text-paw-purple">
                       Repeats every {item.recurringInterval} month{item.recurringInterval === 1 ? "" : "s"}
                     </p>

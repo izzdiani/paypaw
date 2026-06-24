@@ -16,6 +16,7 @@ export type BudgetMonth = {
   income: MoneyItem[];
   bills: MoneyItem[];
   goals: GoalItem[];
+  notes: string;
 };
 
 export type BudgetData = {
@@ -37,6 +38,5 @@ export type GoalItem = {
   targetAmount: number;
   savedAmount: number;
   dueDate?: string;
-  link?: string;
-  note?: string;
+  links: string[];
 };
