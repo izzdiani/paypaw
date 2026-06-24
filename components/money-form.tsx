@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { formatCategoryLabel } from "@/lib/default-categories";
 import { parseMoneyInput } from "@/lib/money";
 import type { CategoryItem, MoneyItem } from "@/lib/types";
@@ -9,6 +9,7 @@ type MoneyFormProps = {
   buttonLabel: string;
   categories?: CategoryItem[];
   includeCategory?: boolean;
+  initialType?: "bill" | "expense";
   nameLabel: string;
   onAdd: (item: Omit<MoneyItem, "id">) => void;
 };
@@ -17,14 +18,21 @@ export function MoneyForm({
   buttonLabel,
   categories = [],
   includeCategory = false,
+  initialType = "bill",
   nameLabel,
   onAdd
 }: MoneyFormProps) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
-  const [itemType, setItemType] = useState<"bill" | "expense">("bill");
+  const [itemType, setItemType] = useState<"bill" | "expense">(initialType);
   const [recurringInterval, setRecurringInterval] = useState("");
+
+  useEffect(() => {
+    if (includeCategory) {
+      setItemType(initialType);
+    }
+  }, [includeCategory, initialType]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,7 +62,7 @@ export function MoneyForm({
     setName("");
     setAmount("");
     setCategory("");
-    setItemType("bill");
+    setItemType(initialType);
     setRecurringInterval("");
   }
 

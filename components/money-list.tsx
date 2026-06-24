@@ -189,7 +189,7 @@ export function MoneyList({
                     }`}
                     type="button"
                   >
-                    {item.isPaid ? "✓" : ""}
+                    {item.isPaid ? <>&#10003;</> : ""}
                   </button>
                 ) : null}
 
