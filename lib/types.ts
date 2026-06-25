@@ -38,5 +38,11 @@ export type GoalItem = {
   targetAmount: number;
   savedAmount: number;
   dueDate?: string;
-  links: string[];
+  links: GoalLink[];
+};
+
+export type GoalLink = {
+  id: string;
+  name: string;
+  url: string;
 };

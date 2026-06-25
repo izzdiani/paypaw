@@ -5,14 +5,14 @@ import { useAuth } from "@/components/auth-provider";
 import { defaultCategories } from "@/lib/default-categories";
 import { roundMoney } from "@/lib/money";
 import { getSupabase } from "@/lib/supabase-client";
-import type { BudgetData, CategoryItem, GoalItem, MoneyItem } from "@/lib/types";
+import type { BudgetData, CategoryItem, GoalItem, GoalLink, MoneyItem } from "@/lib/types";
 
 const STORAGE_KEY = "paypaw-data";
 
-type LegacyGoalItem = GoalItem & {
+type LegacyGoalItem = Omit<GoalItem, "links"> & {
   link?: string;
   note?: string;
-  links?: string[];
+  links?: Array<string | GoalLink>;
 };
 
 function getCurrentMonthKey() {
@@ -175,8 +175,37 @@ function normalizeGoal(goal: LegacyGoalItem): GoalItem {
     targetAmount: roundMoney(goal.targetAmount),
     savedAmount: roundMoney(goal.savedAmount),
     dueDate: goal.dueDate,
-    links
+    links: links
+      .map((link, index) => normalizeGoalLink(link, index))
+      .filter((link) => link.url)
   };
+}
+
+function normalizeGoalLink(link: string | GoalLink, index: number): GoalLink {
+  if (typeof link === "string") {
+    const url = link.trim();
+
+    return {
+      id: crypto.randomUUID(),
+      name: `Link ${index + 1}`,
+      url
+    };
+  }
+
+  const url = link.url.trim();
+  const name = link.name.trim();
+
+  return {
+    id: link.id || crypto.randomUUID(),
+    name: name || `Link ${index + 1}`,
+    url
+  };
+}
+
+function normalizeGoalLinks(links: GoalLink[] = []) {
+  return links
+    .map((link, index) => normalizeGoalLink(link, index))
+    .filter((link) => link.url);
 }
 
 function ensureMonth(data: BudgetData, monthKey: string): BudgetData {
@@ -688,7 +717,7 @@ export function useBudgetStorage() {
               ...goal,
               targetAmount: roundMoney(goal.targetAmount),
               savedAmount: roundMoney(goal.savedAmount),
-              links: goal.links ?? [],
+              links: normalizeGoalLinks(goal.links),
               id: crypto.randomUUID()
             }]
           }
@@ -713,7 +742,8 @@ export function useBudgetStorage() {
                   ...goal,
                   id,
                   targetAmount: roundMoney(goal.targetAmount),
-                  savedAmount: roundMoney(goal.savedAmount)
+                  savedAmount: roundMoney(goal.savedAmount),
+                  links: normalizeGoalLinks(goal.links)
                 }
                 : item
             ))
@@ -723,10 +753,45 @@ export function useBudgetStorage() {
     });
   }
 
-  function addGoalLink(id: string, link: string) {
-    const trimmedLink = link.trim();
+  function addGoalLink(id: string, link: Omit<GoalLink, "id">) {
+    const trimmedUrl = link.url.trim();
+    const trimmedName = link.name.trim();
 
-    if (!trimmedLink) {
+    if (!trimmedUrl) {
+      return;
+    }
+
+    const goalLink: GoalLink = {
+      id: crypto.randomUUID(),
+      name: trimmedName || "Link",
+      url: trimmedUrl
+    };
+
+    updateBudget((current) => {
+      const month = current.months[current.activeMonth];
+
+      return {
+        ...current,
+        months: {
+          ...current.months,
+          [current.activeMonth]: {
+            ...month,
+            goals: month.goals.map((goal) => (
+              goal.id === id
+                ? { ...goal, links: [...goal.links, goalLink] }
+                : goal
+            ))
+          }
+        }
+      };
+    });
+  }
+
+  function updateGoalLink(id: string, linkId: string, link: Omit<GoalLink, "id">) {
+    const trimmedUrl = link.url.trim();
+    const trimmedName = link.name.trim();
+
+    if (!trimmedUrl) {
       return;
     }
 
@@ -741,7 +806,18 @@ export function useBudgetStorage() {
             ...month,
             goals: month.goals.map((goal) => (
               goal.id === id
-                ? { ...goal, links: [...goal.links, trimmedLink] }
+                ? {
+                  ...goal,
+                  links: goal.links.map((goalLink) => (
+                    goalLink.id === linkId
+                      ? {
+                        id: linkId,
+                        name: trimmedName || goalLink.name || "Link",
+                        url: trimmedUrl
+                      }
+                      : goalLink
+                  ))
+                }
                 : goal
             ))
           }
@@ -750,7 +826,7 @@ export function useBudgetStorage() {
     });
   }
 
-  function removeGoalLink(id: string, linkIndex: number) {
+  function removeGoalLink(id: string, linkId: string) {
     updateBudget((current) => {
       const month = current.months[current.activeMonth];
 
@@ -762,7 +838,7 @@ export function useBudgetStorage() {
             ...month,
             goals: month.goals.map((goal) => (
               goal.id === id
-                ? { ...goal, links: goal.links.filter((_link, index) => index !== linkIndex) }
+                ? { ...goal, links: goal.links.filter((link) => link.id !== linkId) }
                 : goal
             ))
           }
@@ -913,6 +989,7 @@ export function useBudgetStorage() {
     addGoal,
     updateGoal,
     addGoalLink,
+    updateGoalLink,
     removeGoalLink,
     addGoalSavedAmount,
     deleteGoal,

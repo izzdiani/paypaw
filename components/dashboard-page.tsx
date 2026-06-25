@@ -32,6 +32,7 @@ export function DashboardPage() {
     addGoal,
     updateGoal,
     addGoalLink,
+    updateGoalLink,
     addGoalSavedAmount,
     removeGoalLink,
     deleteGoal,
@@ -84,6 +85,7 @@ export function DashboardPage() {
           onDelete={deleteGoal}
           onEdit={updateGoal}
           onRemoveLink={removeGoalLink}
+          onUpdateLink={updateGoalLink}
         />
         <section className="grid grid-cols-3 gap-2 rounded-2xl bg-white/85 p-3 text-center shadow-soft">
           <div className="rounded-xl bg-paw-cream p-2">
