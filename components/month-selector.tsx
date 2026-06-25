@@ -53,32 +53,32 @@ export function MonthSelector({
   }
 
   return (
-    <section className="rounded-2xl bg-white/85 p-4 shadow-soft">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="rounded-2xl bg-white/85 p-3 shadow-soft">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <button
           aria-label="Previous year"
           onClick={() => moveYear(-1)}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-paw-blush text-xl font-bold text-paw-purple transition hover:bg-paw-lavender"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-paw-blush text-lg font-bold text-paw-purple transition hover:bg-paw-lavender"
           type="button"
         >
           &lt;
         </button>
 
-        <div className="rounded-full bg-paw-purple px-6 py-2 text-center text-base font-bold text-white">
+        <div className="rounded-full bg-paw-purple px-5 py-1.5 text-center text-sm font-bold text-white">
           {activeYear}
         </div>
 
         <button
           aria-label="Next year"
           onClick={() => moveYear(1)}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-paw-blush text-xl font-bold text-paw-purple transition hover:bg-paw-lavender"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-paw-blush text-lg font-bold text-paw-purple transition hover:bg-paw-lavender"
           type="button"
         >
           &gt;
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         {months.map((month, index) => {
           const monthKey = getMonthKey(activeYear, index);
           const isActive = monthKey === activeMonth;
@@ -88,7 +88,7 @@ export function MonthSelector({
             <button
               key={monthKey}
               onClick={() => onChange(monthKey)}
-              className={`flex min-h-16 flex-col items-center justify-center rounded-2xl text-sm font-bold transition ${
+              className={`flex min-h-11 flex-col items-center justify-center rounded-xl text-sm font-bold transition ${
                 isActive
                   ? "bg-paw-purple text-white shadow-soft"
                   : hasBudget
@@ -99,7 +99,7 @@ export function MonthSelector({
             >
               <span>{month}</span>
               <span
-                className={`mt-2 h-1.5 w-1.5 rounded-full ${
+                className={`mt-1 h-1 w-1 rounded-full ${
                   hasBudget && !isActive ? "bg-paw-purple" : "bg-transparent"
                 }`}
               />
@@ -110,7 +110,7 @@ export function MonthSelector({
 
       <button
         onClick={handleDeleteMonth}
-        className="mt-3 w-full rounded-xl bg-red-100 px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-200"
+        className="mt-2 w-full rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-200"
         type="button"
       >
         Delete Month

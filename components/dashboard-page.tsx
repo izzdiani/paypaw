@@ -58,10 +58,10 @@ export function DashboardPage() {
             hasCurrentMonthData={hasCurrentMonthData}
             onCopy={copyLastMonth}
           />
-        <NotionCsvImport
-          activeMonth={activeMonth}
-          categories={categories}
-          currentBills={bills}
+          <NotionCsvImport
+            activeMonth={activeMonth}
+            categories={categories}
+            currentBills={bills}
             onImport={importBills}
           />
         </div>

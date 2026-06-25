@@ -212,8 +212,8 @@ export function UpcomingGoals({
   }
 
   return (
-    <section className="rounded-2xl bg-white/85 p-4 shadow-soft">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="rounded-2xl bg-white/85 p-3 shadow-soft">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-paw-plum">Upcoming Goals</h2>
         <button
           onClick={startAdd}
@@ -383,13 +383,13 @@ export function UpcomingGoals({
       {goals.length === 0 ? (
         <p className="text-sm font-semibold text-paw-plum/70">No goals yet</p>
       ) : (
-        <ul className="grid gap-3">
+        <ul className="grid gap-2">
           {goals.map((goal) => {
             const progress = getProgress(goal);
             const dueDate = formatDueDate(goal.dueDate);
 
             return (
-              <li key={goal.id} className="rounded-xl bg-paw-cream p-3">
+              <li key={goal.id} className="rounded-xl bg-paw-cream p-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-paw-plum">{goal.name}</p>
@@ -409,28 +409,28 @@ export function UpcomingGoals({
                   </button>
                 </div>
 
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
                   <div
                     className="h-full rounded-full bg-paw-purple"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
 
-                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
                   <input
                     value={savedInputs[goal.id] ?? ""}
                     onChange={(event) => setSavedInputs((current) => ({
                       ...current,
                       [goal.id]: event.target.value
                     }))}
-                    className="rounded-xl border border-paw-lavender bg-white px-3 py-2 text-sm outline-none focus:border-paw-purple"
+                    className="rounded-xl border border-paw-lavender bg-white px-3 py-1.5 text-sm outline-none focus:border-paw-purple"
                     inputMode="decimal"
                     placeholder="Add amount"
                     type="text"
                   />
                   <button
                     onClick={() => addSavedAmount(goal.id)}
-                    className="rounded-xl bg-paw-purple px-3 py-2 text-sm font-bold text-white"
+                    className="rounded-xl bg-paw-purple px-3 py-1.5 text-sm font-bold text-white"
                     type="button"
                   >
                     Add
@@ -438,9 +438,9 @@ export function UpcomingGoals({
                 </div>
 
                 {goal.links.length > 0 ? (
-                  <ul className="mt-3 grid gap-2">
+                  <ul className="mt-2 grid gap-1.5">
                     {goal.links.map((link) => (
-                      <li key={link.id} className="rounded-xl bg-white px-3 py-2">
+                      <li key={link.id} className="rounded-xl bg-white px-2.5 py-1.5">
                         <a
                           href={link.url}
                           target="_blank"
