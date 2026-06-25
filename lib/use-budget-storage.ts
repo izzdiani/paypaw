@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { defaultCategories } from "@/lib/default-categories";
 import { roundMoney } from "@/lib/money";
 import { getSupabase } from "@/lib/supabase-client";
-import type { BudgetData, CategoryItem, GoalItem, GoalLink, MoneyItem } from "@/lib/types";
+import type { BudgetData, BudgetMonth, CategoryItem, GoalItem, GoalLink, MoneyItem } from "@/lib/types";
 
 const STORAGE_KEY = "paypaw-data";
 
@@ -13,6 +13,15 @@ type LegacyGoalItem = Omit<GoalItem, "links"> & {
   link?: string;
   note?: string;
   links?: Array<string | GoalLink>;
+};
+
+type LegacyBudgetMonth = BudgetMonth & {
+  goals?: LegacyGoalItem[];
+};
+
+type LegacyBudgetData = Omit<BudgetData, "goals" | "months"> & {
+  goals?: LegacyGoalItem[];
+  months: Record<string, LegacyBudgetMonth>;
 };
 
 function getCurrentMonthKey() {
@@ -27,11 +36,11 @@ function createEmptyBudget(monthKey = getCurrentMonthKey()): BudgetData {
   return {
     activeMonth: monthKey,
     categories: defaultCategories,
+    goals: [],
     months: {
       [monthKey]: {
         income: [],
         bills: [],
-        goals: [],
         notes: ""
       }
     }
@@ -144,17 +153,17 @@ function getRecurringBillsForNewMonth(data: BudgetData, monthKey: string) {
   return dueBills.map((bill) => copyRecurringBillForMonth(bill, monthKey));
 }
 
-function normalizeBudget(data: BudgetData): BudgetData {
+function normalizeBudget(data: LegacyBudgetData): BudgetData {
   return {
     ...data,
     categories: data.categories?.length ? data.categories : defaultCategories,
+    goals: collectGlobalGoals(data),
     months: Object.fromEntries(
       Object.entries(data.months).map(([monthKey, month]) => [
         monthKey,
         {
           income: month.income ?? [],
           bills: (month.bills ?? []).map((bill) => normalizeBill(bill, monthKey)),
-          goals: (month.goals ?? []).map(normalizeGoal),
           notes: month.notes ?? ""
         }
       ])
@@ -170,7 +179,7 @@ function normalizeGoal(goal: LegacyGoalItem): GoalItem {
       : [];
 
   return {
-    id: goal.id,
+    id: goal.id || crypto.randomUUID(),
     name: goal.name,
     targetAmount: roundMoney(goal.targetAmount),
     savedAmount: roundMoney(goal.savedAmount),
@@ -179,6 +188,24 @@ function normalizeGoal(goal: LegacyGoalItem): GoalItem {
       .map((link, index) => normalizeGoalLink(link, index))
       .filter((link) => link.url)
   };
+}
+
+function collectGlobalGoals(data: LegacyBudgetData) {
+  const goalsById = new Map<string, GoalItem>();
+  const sourceGoals = [
+    ...(data.goals ?? []),
+    ...Object.values(data.months).flatMap((month) => month.goals ?? [])
+  ];
+
+  sourceGoals.forEach((goal) => {
+    const normalizedGoal = normalizeGoal(goal);
+
+    if (!goalsById.has(normalizedGoal.id)) {
+      goalsById.set(normalizedGoal.id, normalizedGoal);
+    }
+  });
+
+  return Array.from(goalsById.values());
 }
 
 function normalizeGoalLink(link: string | GoalLink, index: number): GoalLink {
@@ -220,7 +247,6 @@ function ensureMonth(data: BudgetData, monthKey: string): BudgetData {
       [monthKey]: {
         income: [],
         bills: getRecurringBillsForNewMonth(data, monthKey),
-        goals: [],
         notes: ""
       }
     }
@@ -239,7 +265,7 @@ function readBudget(): BudgetData {
   }
 
   try {
-    const parsed = JSON.parse(saved) as BudgetData;
+    const parsed = JSON.parse(saved) as LegacyBudgetData;
     const activeMonth = typeof parsed.activeMonth === "string"
       ? parsed.activeMonth
       : getCurrentMonthKey();
@@ -247,11 +273,12 @@ function readBudget(): BudgetData {
       ? parsed.months
       : {};
 
-    return normalizeBudget(ensureMonth({
+    return ensureMonth(normalizeBudget({
       activeMonth,
       categories: parsed.categories?.length ? parsed.categories : defaultCategories,
+      goals: parsed.goals ?? [],
       months
-    }, activeMonth));
+    }), activeMonth);
   } catch {
     return createEmptyBudget();
   }
@@ -289,7 +316,7 @@ async function getCloudBudget(userId: string) {
     return null;
   }
 
-  return data as { id: string; data: BudgetData } | null;
+  return data as { id: string; data: LegacyBudgetData } | null;
 }
 
 async function createCloudBudget(userId: string, data: BudgetData) {
@@ -378,7 +405,7 @@ export function useBudgetStorage() {
         return;
       }
 
-      const cloudBudget = normalizeBudget(ensureMonth(cloudRow.data, cloudRow.data.activeMonth));
+      const cloudBudget = ensureMonth(normalizeBudget(cloudRow.data), cloudRow.data.activeMonth);
       const hasDifferentLocalData = Boolean(localRaw && localRaw !== JSON.stringify(cloudBudget));
 
       if (hasDifferentLocalData) {
@@ -416,7 +443,6 @@ export function useBudgetStorage() {
   const activeMonthData = budget.months[budget.activeMonth] ?? {
     income: [],
     bills: [],
-    goals: [],
     notes: ""
   };
   const categories = budget.categories?.length ? budget.categories : defaultCategories;
@@ -516,7 +542,6 @@ export function useBudgetStorage() {
               ...activeMonth.bills,
               ...previousMonth.bills.map((bill) => copyBillItem(bill, activeMonthKey))
             ],
-            goals: activeMonth.goals,
             notes: activeMonth.notes
           }
         }
@@ -703,54 +728,36 @@ export function useBudgetStorage() {
   }
 
   function addGoal(goal: Omit<GoalItem, "id">) {
-    updateBudget((current) => {
-      const nextBudget = ensureMonth(current, current.activeMonth);
-      const month = nextBudget.months[nextBudget.activeMonth];
-
-      return {
-        ...nextBudget,
-        months: {
-          ...nextBudget.months,
-          [nextBudget.activeMonth]: {
-            ...month,
-            goals: [...month.goals, {
-              ...goal,
-              targetAmount: roundMoney(goal.targetAmount),
-              savedAmount: roundMoney(goal.savedAmount),
-              links: normalizeGoalLinks(goal.links),
-              id: crypto.randomUUID()
-            }]
-          }
+    updateBudget((current) => ({
+      ...current,
+      goals: [
+        ...current.goals,
+        {
+          ...goal,
+          targetAmount: roundMoney(goal.targetAmount),
+          savedAmount: roundMoney(goal.savedAmount),
+          links: normalizeGoalLinks(goal.links),
+          id: crypto.randomUUID()
         }
-      };
-    });
+      ]
+    }));
   }
 
   function updateGoal(id: string, goal: Omit<GoalItem, "id">) {
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.map((item) => (
-              item.id === id
-                ? {
-                  ...goal,
-                  id,
-                  targetAmount: roundMoney(goal.targetAmount),
-                  savedAmount: roundMoney(goal.savedAmount),
-                  links: normalizeGoalLinks(goal.links)
-                }
-                : item
-            ))
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.map((item) => (
+        item.id === id
+          ? {
+            ...goal,
+            id,
+            targetAmount: roundMoney(goal.targetAmount),
+            savedAmount: roundMoney(goal.savedAmount),
+            links: normalizeGoalLinks(goal.links)
           }
-        }
-      };
-    });
+          : item
+      ))
+    }));
   }
 
   function addGoalLink(id: string, link: Omit<GoalLink, "id">) {
@@ -767,24 +774,14 @@ export function useBudgetStorage() {
       url: trimmedUrl
     };
 
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.map((goal) => (
-              goal.id === id
-                ? { ...goal, links: [...goal.links, goalLink] }
-                : goal
-            ))
-          }
-        }
-      };
-    });
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.map((goal) => (
+        goal.id === id
+          ? { ...goal, links: [...goal.links, goalLink] }
+          : goal
+      ))
+    }));
   }
 
   function updateGoalLink(id: string, linkId: string, link: Omit<GoalLink, "id">) {
@@ -795,94 +792,54 @@ export function useBudgetStorage() {
       return;
     }
 
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.map((goal) => (
-              goal.id === id
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.map((goal) => (
+        goal.id === id
+          ? {
+            ...goal,
+            links: goal.links.map((goalLink) => (
+              goalLink.id === linkId
                 ? {
-                  ...goal,
-                  links: goal.links.map((goalLink) => (
-                    goalLink.id === linkId
-                      ? {
-                        id: linkId,
-                        name: trimmedName || goalLink.name || "Link",
-                        url: trimmedUrl
-                      }
-                      : goalLink
-                  ))
+                  id: linkId,
+                  name: trimmedName || goalLink.name || "Link",
+                  url: trimmedUrl
                 }
-                : goal
+                : goalLink
             ))
           }
-        }
-      };
-    });
+          : goal
+      ))
+    }));
   }
 
   function removeGoalLink(id: string, linkId: string) {
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.map((goal) => (
-              goal.id === id
-                ? { ...goal, links: goal.links.filter((link) => link.id !== linkId) }
-                : goal
-            ))
-          }
-        }
-      };
-    });
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.map((goal) => (
+        goal.id === id
+          ? { ...goal, links: goal.links.filter((link) => link.id !== linkId) }
+          : goal
+      ))
+    }));
   }
 
   function addGoalSavedAmount(id: string, amount: number) {
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.map((goal) => (
-              goal.id === id
-                ? { ...goal, savedAmount: roundMoney(Math.max(goal.savedAmount + amount, 0)) }
-                : goal
-            ))
-          }
-        }
-      };
-    });
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.map((goal) => (
+        goal.id === id
+          ? { ...goal, savedAmount: roundMoney(Math.max(goal.savedAmount + amount, 0)) }
+          : goal
+      ))
+    }));
   }
 
   function deleteGoal(id: string) {
-    updateBudget((current) => {
-      const month = current.months[current.activeMonth];
-
-      return {
-        ...current,
-        months: {
-          ...current.months,
-          [current.activeMonth]: {
-            ...month,
-            goals: month.goals.filter((goal) => goal.id !== id)
-          }
-        }
-      };
-    });
+    updateBudget((current) => ({
+      ...current,
+      goals: current.goals.filter((goal) => goal.id !== id)
+    }));
   }
 
   function deleteMonth(monthKey: string) {
@@ -894,7 +851,11 @@ export function useBudgetStorage() {
       const remainingMonthKeys = Object.keys(nextMonths).sort();
 
       if (remainingMonthKeys.length === 0) {
-        return createEmptyBudget();
+        return {
+          ...createEmptyBudget(),
+          categories: current.categories,
+          goals: current.goals
+        };
       }
 
       if (current.activeMonth !== monthKey) {
@@ -910,6 +871,7 @@ export function useBudgetStorage() {
       return {
         activeMonth: previousMonth ?? nextMonth ?? remainingMonthKeys[0],
         categories: current.categories,
+        goals: current.goals,
         months: nextMonths
       };
     });
@@ -974,7 +936,7 @@ export function useBudgetStorage() {
     recurringBills,
     incomes: activeMonthData.income,
     bills: activeMonthData.bills,
-    goals: activeMonthData.goals,
+    goals: budget.goals,
     notes: activeMonthData.notes,
     ...totals,
     switchMonth,

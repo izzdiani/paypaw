@@ -15,13 +15,13 @@ export type MoneyItem = {
 export type BudgetMonth = {
   income: MoneyItem[];
   bills: MoneyItem[];
-  goals: GoalItem[];
   notes: string;
 };
 
 export type BudgetData = {
   activeMonth: string;
   categories: CategoryItem[];
+  goals: GoalItem[];
   months: Record<string, BudgetMonth>;
 };
 

@@ -14,7 +14,7 @@ type UnpaidItemsProps = {
 export function UnpaidItems({ categories = [], items, onTogglePaid }: UnpaidItemsProps) {
   const unpaidBills = items.filter((item) => (
     (item.type ?? "bill") === "bill" && item.isPaid !== true
-  ));
+  )).sort((first, second) => second.amount - first.amount);
 
   return (
     <section className="rounded-2xl bg-white/85 p-4 shadow-soft">
