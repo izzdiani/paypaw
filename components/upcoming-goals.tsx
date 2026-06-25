@@ -86,6 +86,7 @@ export function UpcomingGoals({
   const [form, setForm] = useState<GoalFormState>(emptyForm);
   const [links, setLinks] = useState<LinkFormState[]>([]);
   const [newLink, setNewLink] = useState({ name: "", url: "" });
+  const [activeSavedGoalId, setActiveSavedGoalId] = useState<string | null>(null);
   const [savedInputs, setSavedInputs] = useState<Record<string, string>>({});
 
   const editingGoal = goals.find((goal) => goal.id === editingId);
@@ -208,6 +209,7 @@ export function UpcomingGoals({
     if (!Number.isNaN(amount) && amount > 0) {
       onAddSaved(goalId, amount);
       setSavedInputs((current) => ({ ...current, [goalId]: "" }));
+      setActiveSavedGoalId(null);
     }
   }
 
@@ -416,42 +418,50 @@ export function UpcomingGoals({
                   />
                 </div>
 
-                <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    value={savedInputs[goal.id] ?? ""}
-                    onChange={(event) => setSavedInputs((current) => ({
-                      ...current,
-                      [goal.id]: event.target.value
-                    }))}
-                    className="rounded-xl border border-paw-lavender bg-white px-3 py-1.5 text-sm outline-none focus:border-paw-purple"
-                    inputMode="decimal"
-                    placeholder="Add amount"
-                    type="text"
-                  />
+                {activeSavedGoalId === goal.id ? (
+                  <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      value={savedInputs[goal.id] ?? ""}
+                      onChange={(event) => setSavedInputs((current) => ({
+                        ...current,
+                        [goal.id]: event.target.value
+                      }))}
+                      className="rounded-xl border border-paw-lavender bg-white px-3 py-1.5 text-sm outline-none focus:border-paw-purple"
+                      inputMode="decimal"
+                      placeholder="Add amount"
+                      type="text"
+                    />
+                    <button
+                      onClick={() => addSavedAmount(goal.id)}
+                      className="rounded-xl bg-paw-purple px-3 py-1.5 text-sm font-bold text-white"
+                      type="button"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => addSavedAmount(goal.id)}
-                    className="rounded-xl bg-paw-purple px-3 py-1.5 text-sm font-bold text-white"
+                    onClick={() => setActiveSavedGoalId(goal.id)}
+                    className="mt-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-paw-purple shadow-sm transition hover:bg-paw-lavender"
                     type="button"
                   >
-                    Add
+                    Add saved
                   </button>
-                </div>
+                )}
 
                 {goal.links.length > 0 ? (
-                  <ul className="mt-2 grid gap-1.5">
+                  <ul className="mt-2 flex min-w-0 flex-wrap gap-1">
                     {goal.links.map((link) => (
-                      <li key={link.id} className="rounded-xl bg-white px-2.5 py-1.5">
+                      <li key={link.id} className="min-w-0">
                         <a
                           href={link.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="block text-xs font-bold text-paw-purple"
+                          title={link.url}
+                          className="block max-w-32 truncate rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-paw-purple shadow-sm transition hover:bg-paw-lavender"
                         >
                           {link.name}
                         </a>
-                        <p className="truncate text-xs font-semibold text-paw-plum/60">
-                          {link.url}
-                        </p>
                       </li>
                     ))}
                   </ul>
